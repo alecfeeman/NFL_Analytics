@@ -1,0 +1,10 @@
+scrapy
+scipy
+statsmodels
+scikit-learn
+matplotlib
+numpy
+pandas
+tensorflow
+dask
+
