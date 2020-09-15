@@ -3,11 +3,9 @@
 from typing import Any
 
 import pandas as pd
-import scrapy
 import requests
 from bs4 import BeautifulSoup
-import csv
-from abc import ABC
+import re
 # %%
 
 
@@ -39,14 +37,19 @@ class NFLYearScraper:
 
 
 class NFLWeekScraper:
-    base_url = 'https://www.pro-football-reference.com/years/2019/week_1.htm'
     """
 
     """
+    base_url = 'https://www.pro-football-reference.com/years/'
+    weeks = ['week_1', 'week_2', 'week_3', 'week_4', 'week_5', 'week_6', 'week_7', 'week_8', 'week_9', 'week_10',
+             'week_11', 'week_12', 'week_13', 'week_14', 'week_15', 'week_16', 'week_17', 'Wildcard', 'Divisional',
+             'Conf Champ', 'SuperBowl']
+
     def __init__(self, year, week):
         self._set_year(year)
         self._set_week(week)
         self._html = None
+        self.games = list()
 
     # Setters
     def _set_year(self, year):
@@ -62,12 +65,24 @@ class NFLWeekScraper:
             raise ValueError()
 
     def scrape_week(self):
-        #TODO
-        pass
+        self._html = BeautifulSoup(requests.get(self.base_url + str(self.year) + '/' + self.week + '.htm').content,
+                                   'html.parser')
+        for g in self._html.find_all("div", {"class": "game_summary"}):
+            self.games.append(NFLGameScraper(
+                year = self.year,
+                week = self.week,
+                winner = g.find('tr', {'class': 'winner'}).td.a.get_text(),
+                loser = g.find('tr', {'class': 'loser'}).td.a.get_text(),
+                link = g.find('td', {'class': 'gamelink'}).find('a', href=True)['href']
+            ))
 
+    def scrape_games(self):
+        for g in self.games:
+            g.scrape_game()
 
-
-
+    def save_week_data(self):
+        for g in self.games:
+            g.save('parquet')
 
 
 
@@ -119,11 +134,12 @@ class NFLGameScraper:
         'WAS': 'Washington Football Team'
     }
 
-    def __init__(self, year, week, home, away):
+    def __init__(self, year, week, winner, loser, link):
         self._set_year(year)
         self._set_week(week)
-        self._set_home(home)
-        self._set_away(away)
+        self._set_winner(winner)
+        self._set_loser(loser)
+        self.link = link
         self._id = self._generate_id()
         self._html = None
         self._game_info = None
@@ -156,15 +172,15 @@ class NFLGameScraper:
         else:
             raise ValueError()
 
-    def _set_home(self, home):
-        if self._check_team(home):
-            self.home = home
+    def _set_winner(self, winner):
+        if self._check_team(winner):
+            self.winner = winner
         else:
             raise ValueError()
 
-    def _set_away(self, away):
-        if self._check_team(away):
-            self.away = away
+    def _set_loser(self, loser):
+        if self._check_team(loser):
+            self.loser = loser
         else:
             raise ValueError()
 
@@ -176,7 +192,8 @@ class NFLGameScraper:
 
     # Methods to download the HTML for the page
     def scrape_game(self):
-        self._html = requests.get()
+        # TODO
+        self._html = requests.get(self.base_url + )
         self._game_info = self._scrape_game_info()
         self._officials = self._scrape_officials()
         self._team_stats = self._scrape_team_stats()
@@ -192,19 +209,6 @@ class NFLGameScraper:
         self._snap_counts = self._scrape_snap_counts()
         self._drives = self._scrape_drives()
         self._play_by_play = self._scrape_play_by_play()
-
-    def html_table_to_pandas(self, outfile_path, html):
-        outfile = open(outfile_path, "w", newline='')
-        writer = csv.writer(outfile)
-        # need to work this part out
-        tree = BeautifulSoup(html, "lxml")
-        table_tag = tree.select("table")[0]
-        tab_data = [[item.text for item in row_data.select("th,td")]
-                    for row_data in table_tag.select("tr")]
-
-        for data in tab_data:
-            writer.writerow(data)
-            print(' '.join(data))
 
     # Methods to scrape data from html
     def _generate_id(self):
@@ -324,53 +328,44 @@ class NFLGameScraper:
     def get_play_by_play(self):
         return self._play_by_play
 
-    def save(self, filetype):
+    def save(self, filetype, filepath):
+        if not filepath.endswith('/'):
+            filepath = filepath + '/'
         if filetype == 'csv':
-            self.save_csv()
+            self.save_csv(filepath)
         elif filetype == 'parquet':
-            self.save_parquet()
+            self.save_parquet(filepath)
 
-    def save_csv(self):
-        self.get_game_info().to_csv(self.get_id() + '_game_info.csv')
-        self.get_officials().to_csv(self.get_id() + '_officials.csv')
-        self.get_team_stats().to_csv(self.get_id() + '_team_stats.csv')
-        self.get_pass_rush_receive().to_csv(self.get_id() + '_pass_rush_receive.csv')
-        self.get_defense().to_csv(self.get_id() + '_defense.csv')
+    def save_csv(self, filepath):
+        self.get_game_info().to_csv(filepath + self.get_id() + '_game_info.csv')
+        self.get_officials().to_csv(filepath + self.get_id() + '_officials.csv')
+        self.get_team_stats().to_csv(filepath + self.get_id() + '_team_stats.csv')
+        self.get_pass_rush_receive().to_csv(filepath + self.get_id() + '_pass_rush_receive.csv')
+        self.get_defense().to_csv(filepath + self.get_id() + '_defense.csv')
+        self.get_kick_punt_return().to_csv(filepath + self.get_id() + '_kick_punt_return.csv')
+        self.get_kicking_punting().to_csv(filepath + self.get_id() + '_kicking_punting.csv')
+        self.get_advanced_passing().to_csv(filepath + self.get_id() + '_advanced_passing.csv')
+        self.get_advanced_rushing().to_csv(filepath + self.get_id() + '_advanced_rushing.csv')
+        self.get_advanced_receiving().to_csv(filepath + self.get_id() + '_advanced_receiving.csv')
+        self.get_advanced_defense().to_csv(filepath + self.get_id() + '_advanced_defense.csv')
+        self.get_starters().to_csv(filepath + self.get_id() + '_starters.csv')
+        self.get_snap_counts().to_csv(filepath + self.get_id() + '_snap_counts.csv')
+        self.get_drives().to_csv(filepath + self.get_id() + '_drives.csv')
+        self.get_play_by_play().to_csv(filepath + self.get_id() + '_play_by_play.csv')
 
-    def save_parquet(self):
-
-        pass
-
-
-base_url = 'https://www.pro-football-reference.com/years/'
-
-
-
-
-def scrape_year(year):
-    """
-    A function to get all of the games that occured in a given year.
-
-    :param year: The year of the game, a string.
-    :return:
-    """
-    games = dict()
-    weeks = ['week_1', 'week_2', 'week_3', 'week_4', 'week_5', 'week_6', 'week_7', 'week_8', 'week_9', 'week_10',
-             'week_11', 'week_12', 'week_13', 'week_14', 'week_15', 'week_16', 'week_17', 'Wildcard', 'Divisional',
-             'Conf Champ', 'SuperBowl']
-    for week in weeks:
-        scrape_week(year, week)
-
-
-def scrape_week(year, week):
-    """
-    A function to get all of the games that occured in a given week.
-
-    :param year: The year of the game, a string.
-    :param week: The week of the game, a string.
-    :return: A dictionary of games that occured in the week and the respective URL.
-    """
-    scrape_url = base_url + str(year) + '/' + week + '.htm'
-    return
-
-
+    def save_parquet(self, filepath):
+        self.get_game_info().to_parquet(filepath + self.get_id() + '_game_info.csv')
+        self.get_officials().to_parquet(filepath + self.get_id() + '_officials.csv')
+        self.get_team_stats().to_parquet(filepath + self.get_id() + '_team_stats.csv')
+        self.get_pass_rush_receive().to_parquet(filepath + self.get_id() + '_pass_rush_receive.csv')
+        self.get_defense().to_parquet(filepath + self.get_id() + '_defense.csv')
+        self.get_kick_punt_return().to_parquet(filepath + self.get_id() + '_kick_punt_return.csv')
+        self.get_kicking_punting().to_parquet(filepath + self.get_id() + '_kicking_punting.csv')
+        self.get_advanced_passing().to_parquet(filepath + self.get_id() + '_advanced_passing.csv')
+        self.get_advanced_rushing().to_parquet(filepath + self.get_id() + '_advanced_rushing.csv')
+        self.get_advanced_receiving().to_parquet(filepath + self.get_id() + '_advanced_receiving.csv')
+        self.get_advanced_defense().to_parquet(filepath + self.get_id() + '_advanced_defense.csv')
+        self.get_starters().to_parquet(filepath + self.get_id() + '_starters.csv')
+        self.get_snap_counts().to_parquet(filepath + self.get_id() + '_snap_counts.csv')
+        self.get_drives().to_parquet(filepath + self.get_id() + '_drives.csv')
+        self.get_play_by_play().to_parquet(filepath + self.get_id() + '_play_by_play.csv')
