@@ -13,6 +13,7 @@ import re
 # %%
 comm = re.compile("<!--|-->")
 
+
 def html_to_pandas(html):
     rows = []
     for r in html.find_all('tr'):
