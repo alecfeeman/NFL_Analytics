@@ -5,16 +5,42 @@ from typing import Any
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
+from bs4 import Comment
 import re
+import re
+
+
 # %%
+comm = re.compile("<!--|-->")
+
+def html_to_pandas(html):
+    rows = []
+    for r in html.find_all('tr'):
+        row = []
+        for i in r.find_all(['th', 'td']):
+            if len(i) > 0:
+                row.append(str(i.contents[0]))
+            else:
+                row.append(None)
+        rows.append(row)
+    return pd.DataFrame(rows)
+#%%
+
+class NFLDraftScraper():
+    pass
+
+
+class NFLCombineScraper():
+    pass
 
 
 class NFLYearScraper:
-    # TODO
-    base_url = 'https://www.pro-football-reference.com/years/2019/week_1.htm'
     """
 
     """
+    # TODO
+    base_url = 'https://www.pro-football-reference.com/years/2019/week_1.htm'
+
     def __init__(self, year):
         self._set_year(year)
 
@@ -26,20 +52,15 @@ class NFLYearScraper:
             raise ValueError()
 
     def scrape_year(self):
-        #TODO
+        # TODO
         pass
-
-
-
-
-
-
 
 
 class NFLWeekScraper:
     """
 
     """
+    # https: // www.pro - football - reference.com / years / 2019 / week_1.htm
     base_url = 'https://www.pro-football-reference.com/years/'
     weeks = ['week_1', 'week_2', 'week_3', 'week_4', 'week_5', 'week_6', 'week_7', 'week_8', 'week_9', 'week_10',
              'week_11', 'week_12', 'week_13', 'week_14', 'week_15', 'week_16', 'week_17', 'Wildcard', 'Divisional',
@@ -53,7 +74,7 @@ class NFLWeekScraper:
 
     # Setters
     def _set_year(self, year):
-        if (int(year) < 2020) & (int(year) > 2009):
+        if (int(year) <= 2020) & (int(year) >= 1970):
             self.year = year
         else:
             raise ValueError()
@@ -69,11 +90,11 @@ class NFLWeekScraper:
                                    'html.parser')
         for g in self._html.find_all("div", {"class": "game_summary"}):
             self.games.append(NFLGameScraper(
-                year = self.year,
-                week = self.week,
-                winner = g.find('tr', {'class': 'winner'}).td.a.get_text(),
-                loser = g.find('tr', {'class': 'loser'}).td.a.get_text(),
-                link = g.find('td', {'class': 'gamelink'}).find('a', href=True)['href']
+                year=self.year,
+                week=self.week,
+                winner=g.find('tr', {'class': 'winner'}).td.a.get_text(),
+                loser=g.find('tr', {'class': 'loser'}).td.a.get_text(),
+                link=g.find('td', {'class': 'gamelink'}).find('a', href=True)['href']
             ))
 
     def scrape_games(self):
@@ -85,17 +106,11 @@ class NFLWeekScraper:
             g.save('parquet')
 
 
-
-
-
-
-
-
 class NFLGameScraper:
     """
     An object that is used to scrape all of the data for a game from pro-football-reference.com
     """
-    base_url = 'https://www.pro-football-reference.com/boxscores/'
+    base_url = 'https://www.pro-football-reference.com/'
     weeks = ['week_1', 'week_2', 'week_3', 'week_4', 'week_5', 'week_6', 'week_7', 'week_8', 'week_9', 'week_10',
              'week_11', 'week_12', 'week_13', 'week_14', 'week_15', 'week_16', 'week_17', 'Wildcard', 'Divisional',
              'Conf Champ', 'SuperBowl']
@@ -139,9 +154,12 @@ class NFLGameScraper:
         self._set_week(week)
         self._set_winner(winner)
         self._set_loser(loser)
+        # TODO create set link method that removes any starting slash
         self.link = link
         self._id = self._generate_id()
         self._html = None
+        self._scoring = None
+        self._linescore = None
         self._game_info = None
         self._officials = None
         self._team_stats = None
@@ -193,22 +211,22 @@ class NFLGameScraper:
     # Methods to download the HTML for the page
     def scrape_game(self):
         # TODO
-        self._html = requests.get(self.base_url + )
-        self._game_info = self._scrape_game_info()
-        self._officials = self._scrape_officials()
-        self._team_stats = self._scrape_team_stats()
-        self._pass_rush_receive = self._scrape_pass_rush_receive()
-        self._defense = self._scrape_defense()
-        self._kick_punt_return = self._scrape_kick_punt_return()
-        self._kicking_punting = self._scrape_kicking_punting()
-        self._advanced_passing = self._scrape_advanced_passing()
-        self._advanced_rushing = self._scrape_advanced_rushing()
-        self._advanced_receiving = self._scrape_advanced_receiving()
-        self._advanced_defense = self._scrape_advanced_defense()
-        self._starters = self._scrape_starters()
-        self._snap_counts = self._scrape_snap_counts()
-        self._drives = self._scrape_drives()
-        self._play_by_play = self._scrape_play_by_play()
+        self._html = BeautifulSoup(comm.sub('', requests.get(self.base_url + self.link).text), 'lxml')
+        self._scrape_game_info()
+        self._scrape_officials()
+        self._scrape_team_stats()
+        self._scrape_pass_rush_receive()
+        self._scrape_defense()
+        self._scrape_kick_punt_return()
+        self._scrape_kicking_punting()
+        self._scrape_advanced_passing()
+        self._scrape_advanced_rushing()
+        self._scrape_advanced_receiving()
+        self._scrape_advanced_defense()
+        self._scrape_starters()
+        self._scrape_snap_counts()
+        self._scrape_drives()
+        self._scrape_play_by_play()
 
     # Methods to scrape data from html
     def _generate_id(self):
@@ -219,65 +237,115 @@ class NFLGameScraper:
         """
         return str(self.year) + str(self.week) + str(self.home) + str(self.away)
 
+    def _scrape_scoring(self):
+        scoring_html = self._html.find('table', {'id': 'scoring'})
+        scoring = html_to_pandas(scoring_html)
+        scoring.columns = scoring.iloc[0]
+        scoring.drop(scoring.index[0], inplace=True)
+        self._scoring = scoring
+
+    def _scrape_linescore(self):
+        linescore_html = self._html.find('table', {'class': 'linescore'})
+        linescore = html_to_pandas(linescore_html)
+        linescore.drop(columns=0, inplace=True)
+        linescore.columns = ['Team', 'Q1', 'Q2', 'Q3', 'Q4', 'FINAL']
+        linescore = linescore.loc[1:]
+        self._linescore = linescore
+
     def _scrape_game_info(self):
-        #TODO
-        return pd.DataFrame()
+        # TODO, make sure to also get coaches, stadium
+        game_info_html = self._html.find('table', {'id': 'game_info'})
+        game_info = html_to_pandas(game_info_html)
+
+        self._game_info(game_info)
 
     def _scrape_officials(self):
-        # TODO
-        return pd.DataFrame()
+        officials_html = self._html.find('table', {'id': 'officials'})
+        officials = html_to_pandas(officials_html)
+        officials.columns = ['position', 'official']
+        officials.set_index('position', inplace=True)
+        officials.drop('Officials', inplace=True)
+        self._officials(officials)
 
     def _scrape_team_stats(self):
-        # TODO
-        return 1
+        team_stats_html = self._html.find('table', {'id': 'team_stats'})
+        team_stats = html_to_pandas(team_stats_html)
+        team_stats.columns = ['stat', 'visitor', 'rows']
+        team_stats.loc[0, 'stat'] = 'Teams'
+        team_stats.set_index('stat', inplace=True)
+        self._team_stats(team_stats)
 
     def _scrape_pass_rush_receive(self):
         # TODO
-        return 1
+        pass_rush_receive = pd.DataFrame()
+
+        self._pass_rush_receive(pass_rush_receive)
 
     def _scrape_defense(self):
         # TODO
-        return 1
+        defense = pd.DataFrame()
+
+        self._defense(defense)
 
     def _scrape_kick_punt_return(self):
         # TODO
-        return 1
+        kick_punt_return = pd.DataFrame()
+
+        self._kick_punt_return(kick_punt_return)
 
     def _scrape_kicking_punting(self):
         # TODO
-        return 1
+        kicking_punting = pd.DataFrame()
+
+        self._kicking_punting(kicking_punting)
 
     def _scrape_advanced_passing(self):
         # TODO
-        return 1
+        advanced_passing = pd.DataFrame()
+
+        self._advanced_passing(advanced_passing)
 
     def _scrape_advanced_rushing(self):
         # TODO
-        return 1
+        advanced_rushing = pd.DataFrame()
+
+        self._advanced_rushing(advanced_rushing)
 
     def _scrape_advanced_receiving(self):
         # TODO
-        return 1
+        advanced_receiving = pd.DataFrame()
+
+        self._advanced_receiving(advanced_receiving)
 
     def _scrape_advanced_defense(self):
         # TODO
-        return 1
+        officials = pd.DataFrame()
+
+        self._officials(officials)
 
     def _scrape_starters(self):
         # TODO
-        return 1
+        officials = pd.DataFrame()
+
+        self._officials(officials)
 
     def _scrape_snap_counts(self):
         # TODO
-        return 1
+        officials = pd.DataFrame()
+
+        self._officials(officials)
 
     def _scrape_drives(self):
         # TODO
-        return 1
+        officials = pd.DataFrame()
+
+        self._officials(officials)
 
     def _scrape_play_by_play(self):
         # TODO
-        return 1
+        officials = pd.DataFrame()
+
+        self._officials(officials)
 
     # Getter methods
     def get_id(self):

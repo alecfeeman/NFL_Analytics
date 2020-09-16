@@ -3,6 +3,9 @@ A fully analytical approach to the NFL front office.
 
 ## Data Management
 Weekly batch job to get new game data, 
+Ingestion -> Process -> Storage -> Analytics
+
+
 ## Forecasts
 Player level - Game Level Predictions
 
@@ -11,11 +14,9 @@ Player level - Game Level Predictions
 Use combine and college data to analyze a players addition to your team.
 
 
-### Trade Advisor
+#### Trade Advisor
 
 
 #### Free Agent Advisor
 Use game forecasts to analyze a players addition to your team.
 
-#### Contract Advisor
-Possible future expansion.
