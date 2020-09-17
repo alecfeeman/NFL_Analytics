@@ -1,4 +1,18 @@
-# Scrape Data from https://www.pro-football-reference.com
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+"""
+Scrape Data from https://www.pro-football-reference.com
+"""
+__author__ = "Alec Feeman"
+__copyright__ = "Copyright 2020, Alec Feeman"
+__credits__ = ["Alec Feeman"]
+__license__ = "GPL"
+__version__ = "v0.1.0-alpha"
+__date__ = "09/16/2020"
+__maintainer__ = "Alec Feeman"
+__email__ = "afeeman@icloud.com"
+__status__ = "Development"
+
 # %%
 from typing import Any
 
@@ -15,6 +29,14 @@ comm = re.compile("<!--|-->")
 
 
 def html_to_pandas(html):
+    """
+    A function to convert a html table to a pandas dataframe.
+
+    :param html: A html table.
+    :type html: BeautifulSoup tag object
+    :return: The converted table.
+    :rtype: Pandas Dataframe
+    """
     rows = []
     for r in html.find_all('tr'):
         row = []
@@ -25,16 +47,19 @@ def html_to_pandas(html):
                 row.append(None)
         rows.append(row)
     return pd.DataFrame(rows)
-#%%
 
+
+#%%
 class NFLDraftScraper():
     pass
 
 
+#%%
 class NFLCombineScraper():
     pass
 
 
+#%%
 class NFLYearScraper:
     """
 
@@ -57,11 +82,18 @@ class NFLYearScraper:
         pass
 
 
+#%%
 class NFLWeekScraper:
     """
+    A class to
+
+    Attributes
+    ----------
+
+    Methods
+    ----------
 
     """
-    # https: // www.pro - football - reference.com / years / 2019 / week_1.htm
     base_url = 'https://www.pro-football-reference.com/years/'
     weeks = ['week_1', 'week_2', 'week_3', 'week_4', 'week_5', 'week_6', 'week_7', 'week_8', 'week_9', 'week_10',
              'week_11', 'week_12', 'week_13', 'week_14', 'week_15', 'week_16', 'week_17', 'Wildcard', 'Divisional',
@@ -107,6 +139,7 @@ class NFLWeekScraper:
             g.save('parquet')
 
 
+#%%
 class NFLGameScraper:
     """
     An object that is used to scrape all of the data for a game from pro-football-reference.com
@@ -320,33 +353,33 @@ class NFLGameScraper:
 
     def _scrape_advanced_defense(self):
         # TODO
-        officials = pd.DataFrame()
+        advanced_defense = pd.DataFrame()
 
-        self._officials(officials)
+        self._advanced_defense(advanced_defense)
 
     def _scrape_starters(self):
         # TODO
-        officials = pd.DataFrame()
+        starters = pd.DataFrame()
 
-        self._officials(officials)
+        self._starters(starters)
 
     def _scrape_snap_counts(self):
         # TODO
-        officials = pd.DataFrame()
+        snap_counts = pd.DataFrame()
 
-        self._officials(officials)
+        self._snap_counts(snap_counts)
 
     def _scrape_drives(self):
         # TODO
-        officials = pd.DataFrame()
+        drives = pd.DataFrame()
 
-        self._officials(officials)
+        self._drives(drives)
 
     def _scrape_play_by_play(self):
         # TODO
-        officials = pd.DataFrame()
+        play_by_play = pd.DataFrame()
 
-        self._officials(officials)
+        self._play_by_play(play_by_play)
 
     # Getter methods
     def get_id(self):
