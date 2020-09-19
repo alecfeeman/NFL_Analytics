@@ -118,9 +118,11 @@ class NFLWeekScraper:
         else:
             raise ValueError()
 
+    # Methods
     def scrape_week(self):
-        self._html = BeautifulSoup(requests.get(self.base_url + str(self.year) + '/' + self.week + '.htm').content,
-                                   'html.parser')
+        self._html = BeautifulSoup(comm.sub('', requests.get(self.base_url + str(self.year) + '/' + self.week + '.htm')
+                                            .text), 'lxml')
+
         for g in self._html.find_all("div", {"class": "game_summary"}):
             self.games.append(NFLGameScraper(
                 year=self.year,

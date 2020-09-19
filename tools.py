@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-
+Generic Data Science tools used throughout the project.
 """
 __author__ = "Alec Feeman"
 __copyright__ = "Copyright 2020, Alec Feeman"
