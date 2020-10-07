@@ -129,3 +129,58 @@ class bidict(dict):
         if self[key] in self.inverse and not self.inverse[self[key]]:
             del self.inverse[self[key]]
         super(bidict, self).__delitem__(key)
+
+
+TEAMS = bidict({
+    'CDG': 'Arizona Cardinals',
+    'ATL': 'Atlanta Falcons',
+    'RAV': 'Baltimore Ravens',
+    'BUF': 'Buffalo Bills',
+    'CAR': 'Carolina Panthers',
+    'CHI': 'Chicago Bears',
+    'CIN': 'Cincinnati Bengals',
+    'CLE': 'Cleveland Browns',
+    'DAL': 'Dallas Cowboys',
+    'DEN': 'Denver Broncos',
+    'DET': 'Detroit Lions',
+    'GNB': 'Green Bay Packers',
+    'HTX': 'Houston Texans',
+    'CLT': 'Indianapolis Colts',
+    'JAX': 'Jacksonville Jaguars',
+    'KAN': 'Kansas City Chiefs',
+    'SDG': 'Los Angeles Chargers',
+    'RAM': 'Los Angeles Rams',
+    'MIA': 'Miami Dolphina',
+    'MIN': 'Minnesota Vikings',
+    'NWE': 'New England Patriots',
+    'NOR': 'New Orleans Saints',
+    'NYG': 'Mew York Giants',
+    'NYJ': 'New York Jets',
+    'RAI': 'Las Vegas Raiders',
+    'PHI': 'Philadelphia Eagles',
+    'PIT': 'Pittsburgh Steelers',
+    'SFO': 'San Fransisco 49ers',
+    'SEA': 'Seattle Seahawks',
+    'TAM': 'Tampa Bay Buccaneers',
+    'OTI': 'Tennessee Titans',
+    'WAS': 'Washington Football Team'
+})
+
+
+def check_team(team):
+    """
+    Check if a team abbreviation is valid. If a valid full team name is passed convert it to the abbreviation.
+
+    Args:
+
+    Returns:
+
+    Raises:
+        TypeError: The team arg must be a string.
+    """
+    if team.upper() in TEAMS.keys():
+        return team.upper()
+    elif team in TEAMS.values():
+        return TEAMS.inverse[team]
+    else:
+        return False

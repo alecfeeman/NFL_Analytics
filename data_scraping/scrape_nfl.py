@@ -36,7 +36,8 @@ from bs4 import BeautifulSoup
 import bs4
 import re
 import logging
-import project_tools
+import time
+import os
 
 # %%
 comm = re.compile("<!--|-->")
@@ -46,58 +47,6 @@ logger.addHandler(logging.NullHandler())
 WEEKS = ['week_1', 'week_2', 'week_3', 'week_4', 'week_5', 'week_6', 'week_7', 'week_8', 'week_9', 'week_10',
          'week_11', 'week_12', 'week_13', 'week_14', 'week_15', 'week_16', 'week_17', 'Wildcard', 'Divisional',
          'ConfChamp', 'SuperBowl']
-
-TEAMS = project_tools.bidict({
-    'CDG': 'Arizona Cardinals',
-    'ATL': 'Atlanta Falcons',
-    'RAV': 'Baltimore Ravens',
-    'BUF': 'Buffalo Bills',
-    'CAR': 'Carolina Panthers',
-    'CHI': 'Chicago Bears',
-    'CIN': 'Cincinnati Bengals',
-    'CLE': 'Cleveland Browns',
-    'DAL': 'Dallas Cowboys',
-    'DEN': 'Denver Broncos',
-    'DET': 'Detroit Lions',
-    'GNB': 'Green Bay Packers',
-    'HTX': 'Houston Texans',
-    'CLT': 'Indianapolis Colts',
-    'JAX': 'Jacksonville Jaguars',
-    'KAN': 'Kansas City Chiefs',
-    'SDG': 'Los Angeles Chargers',
-    'RAM': 'Los Angeles Rams',
-    'MIA': 'Miami Dolphina',
-    'MIN': 'Minnesota Vikings',
-    'NWE': 'New England Patriots',
-    'NOR': 'New Orleans Saints',
-    'NYG': 'Mew York Giants',
-    'NYJ': 'New York Jets',
-    'RAI': 'Las Vegas Raiders',
-    'PHI': 'Philadelphia Eagles',
-    'PIT': 'Pittsburgh Steelers',
-    'SFO': 'San Fransisco 49ers',
-    'SEA': 'Seattle Seahawks',
-    'TAM': 'Tampa Bay Buccaneers',
-    'OTI': 'Tennessee Titans',
-    'WAS': 'Washington Football Team'
-})
-
-
-def check_team(team):
-    """
-    Check if a team abbreviation is valid. If a valid full team name is passed convert it to the abbreviation.
-
-    Args:
-
-    Returns:
-
-    Raises:
-        TypeError: The team arg must be a string.
-    """
-    if team.upper() in TEAMS.keys():
-        return True
-    else:
-        return False
 
 
 def html_to_pandas(html):
@@ -126,8 +75,16 @@ def html_to_pandas(html):
     return pd.DataFrame(rows)
 
 
-def clean_stat_table(df):
-    df.columns = df.iloc[1]
+def clean_stat_table(df, kind):
+    """
+
+    """
+    if kind == 'regular':
+        df.columns = df.iloc[1]
+    elif kind == 'advanced':
+        df.columns = df.iloc[0]
+    else:
+        raise
     indexes_to_drop = df.loc[df['Player'] == 'Player'].index.values.tolist() + \
                       df.loc[df['Player'].isnull()].index.values.tolist()
     df.drop(index=indexes_to_drop, inplace=True)
@@ -209,6 +166,7 @@ class NFLWeekScraper:
         self._set_week(week)
         self._html = None
         self.games = list()
+        self._logger.info(f"Created week object for: {self.year}, {self.week}")
 
     # Setters
     def _set_year(self, year):
@@ -227,13 +185,11 @@ class NFLWeekScraper:
     def scrape_week(self):
         self._html = BeautifulSoup(comm.sub('', requests.get(self.base_url + str(self.year) + '/' + self.week + '.htm')
                                             .text), 'lxml')
-
         for g in self._html.find_all("div", {"class": "game_summary"}):
+            time.sleep(1)
             self.games.append(NFLGameScraper(
                 year=self.year,
                 week=self.week,
-                winner=g.find('tr', {'class': 'winner'}).td.a.get_text(),
-                loser=g.find('tr', {'class': 'loser'}).td.a.get_text(),
                 link=g.find('td', {'class': 'gamelink'}).find('a', href=True)['href']
             ))
 
@@ -243,7 +199,10 @@ class NFLWeekScraper:
 
     def save_week_data(self):
         for g in self.games:
-            g.save('parquet')
+            filepath = f'./data/raw/games/{g.get_id()}/'
+            if not os.path.isdir(filepath):
+                os.mkdir(filepath)
+            g.save('csv', filepath)
 
 
 # %%
@@ -258,15 +217,13 @@ class NFLGameScraper:
     """
     base_url = 'https://www.pro-football-reference.com/'
 
-    def __init__(self, year, week, winner, loser, link):
+    def __init__(self, year, week, link):
         self._logger = logging.getLogger(__name__)
         self._logger.addHandler(logging.NullHandler())
         self._set_year(year)
         self._set_week(week)
-        self._set_winner(winner)
-        self._set_loser(loser)
         self._set_link(link)
-        self._id = self._generate_id()
+        self._set_id(link)
         self._html = None
         self._scoring = None
         self._linescore = None
@@ -286,10 +243,11 @@ class NFLGameScraper:
         self._drives = None
         self._play_by_play = None
         self.scrape_game()
+        self._logger.info(f"Created game object for game: {self._id}")
 
     # Setters
     def _set_year(self, year):
-        if (int(year) < 2020) & (int(year) > 2009):
+        if (int(year) < 2020) & (int(year) > 1970):
             self.year = year
         else:
             raise ValueError()
@@ -306,18 +264,6 @@ class NFLGameScraper:
             raise TypeError()
         if link.startswith('/'):
             self.link = link[1:]
-
-    def _set_winner(self, winner):
-        if check_team(winner):
-            self.winner = winner
-        else:
-            raise ValueError()
-
-    def _set_loser(self, loser):
-        if check_team(loser):
-            self.loser = loser
-        else:
-            raise ValueError()
 
     # Methods to download the HTML for the page
     def scrape_game(self):
@@ -337,18 +283,22 @@ class NFLGameScraper:
         self._scrape_advanced_rushing()
         self._scrape_advanced_receiving()
         self._scrape_advanced_defense()
-        self._scrape_starters()
+        # For some reason certain games dont have a starters table
+        if self._html.find('table', {'id': 'home_starters'}):
+            self._scrape_starters()
+        else:
+            self._logger.warning(f"No starters for the game: {self._id}")
         self._scrape_snap_counts()
         self._scrape_drives()
         self._scrape_play_by_play()
 
     # Methods to scrape data from html
-    def _generate_id(self):
+    def _set_id(self, link):
         """
-        Generate a unique ID for a game as year, week, winning team, losing team.
-        Example: 2019week_1CLEDEN
+        Generate a unique ID for a game
+        Example: 201809090cle
         """
-        return str(self.year) + str(self.week) + str(self.winner) + str(self.loser)
+        self._id = self.link[-16:-4]
 
     def _scrape_scoring(self):
         """Scrape the scoring table for the game and save it as a pandas dataframe"""
@@ -363,14 +313,15 @@ class NFLGameScraper:
         """Scrape the linescore table for the game and save it as a pandas dataframe"""
         linescore_html = self._html.find('table', {'class': 'linescore'})
         linescore = html_to_pandas(linescore_html)
-        linescore.drop(columns=0, inplace=True)
-        linescore.columns = ['Team', 'Q1', 'Q2', 'Q3', 'Q4', 'FINAL']
+        linescore.columns = linescore.iloc[0]
+        linescore.drop(index=0, inplace=True)
         linescore = linescore.loc[1:]
         self._linescore = linescore
         self._logger.info(f'Linescore data scraped for the game {self._id}')
 
     def _scrape_game_info(self):
         """Scrape the game info as well as the coaches and stadium and save it as a pandas dataframe"""
+        # TODO: Can we get a date for the game here??
         game_info_html = self._html.find('table', {'id': 'game_info'})
         game_info = html_to_pandas(game_info_html)
         # Find the coaches and add them to game info
@@ -386,7 +337,7 @@ class NFLGameScraper:
         # find the away team and add it to game info
         away_team = self._html.find('div', {'class': 'scorebox'}).find_all('a')[7]
         game_info = game_info.append({0: 'away team', 1: str(away_team)}, ignore_index=True)
-        self._game_info(game_info)
+        self._game_info = game_info
         self._logger.info(f'Game info data scraped for the game {self._id}')
 
     def _scrape_officials(self):
@@ -396,7 +347,7 @@ class NFLGameScraper:
         officials.columns = ['position', 'official']
         officials.set_index('position', inplace=True)
         officials.drop('Officials', inplace=True)
-        self._officials(officials)
+        self._officials = officials
         self._logger.info(f'Officials data scraped for the game {self._id}')
 
     def _scrape_team_stats(self):
@@ -406,36 +357,36 @@ class NFLGameScraper:
         team_stats.columns = ['stat', 'visitor', 'rows']
         team_stats.loc[0, 'stat'] = 'Teams'
         team_stats.set_index('stat', inplace=True)
-        self._team_stats(team_stats)
+        self._team_stats = team_stats
         self._logger.info(f'Team stats data scraped for the game {self._id}')
 
     def _scrape_pass_rush_receive(self):
         """Scrape the offensive player stats for the game and save it as a pandas dataframe"""
         pass_rush_receive_html = self._html.find('table', {'id': 'player_offense'})
-        pass_rush_receive = clean_stat_table(html_to_pandas(pass_rush_receive_html))
+        pass_rush_receive = clean_stat_table(html_to_pandas(pass_rush_receive_html), 'regular')
         cols = ['player', 'team', 'pass_completions', 'pass_attempts', 'passing_yds', 'pass_td',
                 'int_thrown', 'times_sacked', 'yds_lst_sacks', 'long_pass', 'qb_rating', 'rush_attempts',
                 'rush_yards', 'rush_td', 'long_rush', 'pass_targets', 'pass_receptions', 'receive_yards',
                 'receive_td', 'long_reception', 'fumbles', 'fumbles_lst']
         pass_rush_receive.columns = cols
-        self._pass_rush_receive(pass_rush_receive)
+        self._pass_rush_receive = pass_rush_receive
         self._logger.info(f'Offensive player stats data scraped for the game {self._id}')
 
     def _scrape_defense(self):
         """Scrape the defensive player stats for the game and save it as a pandas dataframe"""
         defense_html = self._html.find('table', {'id': 'player_defense'})
-        defense = clean_stat_table(html_to_pandas(defense_html))
+        defense = clean_stat_table(html_to_pandas(defense_html), 'regular')
         cols = ['player', 'team', 'ints', 'int_rtn_yards', 'int_rtn_td', 'long_int_rtn', 'passes_defended', 'sacks',
-                'comb_tackles', 'colo_tackles', 'assist_tackles', 'qb_hits', 'fumb_rec', 'fumb_rtn_yds', 'fumb_rtn_td',
-                'forced_fumb']
+                'comb_tackles', 'solo_tackles', 'assist_tackles', 'tackles_for_loss', 'qb_hits', 'fumb_rec',
+                'fumb_rtn_yds', 'fumb_rtn_td', 'forced_fumb']
         defense.columns = cols
-        self._defense(defense)
+        self._defense = defense
         self._logger.info(f'Defensive player stats data scraped for the game {self._id}')
 
     def _scrape_kick_punt_return(self):
         """Scrape the returns player stats for the game and save it as a pandas dataframe"""
         kick_punt_return_html = self._html.find('table', {'id': 'returns'})
-        kick_punt_return = clean_stat_table(html_to_pandas(kick_punt_return_html))
+        kick_punt_return = clean_stat_table(html_to_pandas(kick_punt_return_html), 'regular')
         cols = ['player', 'team', 'kick_rtns', 'kick_rtn_yds', 'kick_yds_per_rtn', 'kick_rtn_td', 'long_kick_rtn',
                 'pnt_rtns', 'pnt_rtn_yds', 'pnt_yds_per_rtn', 'pnt_rtn_td', 'long_pnt_rtn']
         kick_punt_return.columns = cols
@@ -446,7 +397,7 @@ class NFLGameScraper:
         """Scrape the kicking player stats for the game and save it as a pandas dataframe"""
         # TODO - need to rename columns
         kicking_punting_html = self._html.find('table', {'id': 'kicking'})
-        kicking_punting = clean_stat_table(html_to_pandas(kicking_punting_html))
+        kicking_punting = clean_stat_table(html_to_pandas(kicking_punting_html), 'regular')
         cols = ['player', 'team', 'xp_made', 'xp_attempt', 'fg_made', 'fg_attempted', 'num_pnt', 'pnt_yds',
                 'yds_per_punt', 'lng_pnt']
         kicking_punting.columns = cols
@@ -456,28 +407,28 @@ class NFLGameScraper:
     def _scrape_advanced_passing(self):
         """Scrape the advanced passing player stats for the game and save it as a pandas dataframe"""
         advanced_passing_html = self._html.find('table', {'id': 'passing_advanced'})
-        advanced_passing = clean_stat_table(html_to_pandas(advanced_passing_html))
+        advanced_passing = clean_stat_table(html_to_pandas(advanced_passing_html), 'advanced')
         self._advanced_passing = advanced_passing
         self._logger.info(f'Advanced passing data scraped for the game {self._id}')
 
     def _scrape_advanced_rushing(self):
         """Scrape the advanced rushing player stats for the game and save it as a pandas dataframe"""
         advanced_rushing_html = self._html.find('table', {'id': 'rushing_advanced'})
-        advanced_rushing = clean_stat_table(html_to_pandas(advanced_rushing_html))
+        advanced_rushing = clean_stat_table(html_to_pandas(advanced_rushing_html), 'advanced')
         self._advanced_rushing = advanced_rushing
         self._logger.info(f'Advanced rushing data scraped for the game {self._id}')
 
     def _scrape_advanced_receiving(self):
         """Scrape the advanced receiving player stats for the game and save it as a pandas dataframe"""
         advanced_receiving_html = self._html.find('table', {'id': 'receiving_advanced'})
-        advanced_receiving = clean_stat_table(html_to_pandas(advanced_receiving_html))
+        advanced_receiving = clean_stat_table(html_to_pandas(advanced_receiving_html), 'advanced')
         self._advanced_receiving = advanced_receiving
         self._logger.info(f'Advanced receiving data scraped for the game {self._id}')
 
     def _scrape_advanced_defense(self):
         """Scrape the advanced receiving player stats for the game and save it as a pandas dataframe"""
         advanced_defense_html = self._html.find('table', {'id': 'defense_advanced'})
-        advanced_defense = clean_stat_table(html_to_pandas(advanced_defense_html))
+        advanced_defense = clean_stat_table(html_to_pandas(advanced_defense_html), 'advanced')
         self._advanced_defense = advanced_defense
         self._logger.info(f'Advanced defense data scraped for the game {self._id}')
 
@@ -608,10 +559,12 @@ class NFLGameScraper:
         self.get_advanced_rushing().to_csv(filepath + self.get_id() + '_advanced_rushing.csv')
         self.get_advanced_receiving().to_csv(filepath + self.get_id() + '_advanced_receiving.csv')
         self.get_advanced_defense().to_csv(filepath + self.get_id() + '_advanced_defense.csv')
-        self.get_starters().to_csv(filepath + self.get_id() + '_starters.csv')
+        if self._starters is not None:
+            self.get_starters().to_csv(filepath + self.get_id() + '_starters.csv')
         self.get_snap_counts().to_csv(filepath + self.get_id() + '_snap_counts.csv')
         self.get_drives().to_csv(filepath + self.get_id() + '_drives.csv')
         self.get_play_by_play().to_csv(filepath + self.get_id() + '_play_by_play.csv')
+        self._logger.info(f"Data saved for game: {self._id} as CSV files")
 
     def save_parquet(self, filepath):
         self.get_game_info().to_parquet(filepath + self.get_id() + '_game_info.csv')
@@ -625,7 +578,9 @@ class NFLGameScraper:
         self.get_advanced_rushing().to_parquet(filepath + self.get_id() + '_advanced_rushing.csv')
         self.get_advanced_receiving().to_parquet(filepath + self.get_id() + '_advanced_receiving.csv')
         self.get_advanced_defense().to_parquet(filepath + self.get_id() + '_advanced_defense.csv')
-        self.get_starters().to_parquet(filepath + self.get_id() + '_starters.csv')
+        if self._starters is not None:
+            self.get_starters().to_parquet(filepath + self.get_id() + '_starters.csv')
         self.get_snap_counts().to_parquet(filepath + self.get_id() + '_snap_counts.csv')
         self.get_drives().to_parquet(filepath + self.get_id() + '_drives.csv')
         self.get_play_by_play().to_parquet(filepath + self.get_id() + '_play_by_play.csv')
+        self._logger.info(f"Data saved for game: {self._id} as parquet files")
