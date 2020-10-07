@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+
 """
-Generic Data Science tools used throughout the project.
+Code to scrape all modern historical NFL data up to today.
 
 -----------------------------------------------------------------------------
 This program is free software: you can redistribute it and/or modify it under
@@ -26,10 +27,15 @@ __maintainer__ = "Alec Feeman"
 __email__ = "afeeman@icloud.com"
 __status__ = "Development"
 
-import pandas as pd
+import logging
+import data_scraping.scrape_nfl as scrape_nfl
+
+logging.basicConfig(filename='example.log', level=logging.DEBUG)
 
 
-def expand_pandas_output():
-    pd.set_option('display.max_rows', 500)
-    pd.set_option('display.max_columns', 500)
-    pd.set_option('display.width', 1000)
+def main():
+    pass
+
+
+if __name__ == "__main__":
+    main()

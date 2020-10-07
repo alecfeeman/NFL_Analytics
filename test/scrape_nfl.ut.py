@@ -103,3 +103,8 @@ class TestNFLGameScraper(unittest.TestCase):
 
     def test(self):
         self.assertIsInstance()
+
+
+if __name__ == '__main__':
+    unittest.main()
+

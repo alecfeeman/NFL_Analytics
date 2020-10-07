@@ -26,3 +26,15 @@ __date__ = "09/16/2020"
 __maintainer__ = "Alec Feeman"
 __email__ = "afeeman@icloud.com"
 __status__ = "Development"
+
+import logging
+logging.basicConfig(filename='example.log', level=logging.DEBUG)
+import data_scraping.scrape_nfl as scrape_nfl
+
+
+def main():
+    pass
+
+
+if __name__ == "__main__":
+    main()
