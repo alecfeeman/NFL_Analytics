@@ -28,8 +28,31 @@ __email__ = "afeeman@icloud.com"
 __status__ = "Development"
 
 import logging
-logging.basicConfig(filename='example.log', level=logging.DEBUG)
 import data_scraping.scrape_nfl as scrape_nfl
+import data_scraping.etl as etl
+
+LEVELS = {'debug': logging.DEBUG,
+          'info': logging.INFO,
+          'warning': logging.WARNING,
+          'error': logging.ERROR,
+          'critical': logging.CRITICAL}
+
+
+def configure_logging( file_level, console_level, filepath):
+    logger = logging.getLogger(__name__)
+    logger.setLevel(file_level)
+    formatter = logging.Formatter("%(asctime)s - %(module)s - %(levelname)s - %(message)s")
+    # create a file handler
+    fh = logging.FileHandler(filepath)
+    fh.setFormatter(formatter)
+    # fh.setLevel(file_level)
+    logger.addHandler(fh)
+    # create a stream handler for the console
+    # ch = logging.StreamHandler()
+    # ch.setLevel(console_level)
+    # ch.setFormatter(formatter)
+    # logger.addHandler(ch)
+    return logger
 
 
 def main():

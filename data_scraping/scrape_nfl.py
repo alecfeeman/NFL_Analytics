@@ -45,8 +45,8 @@ logger = logging.getLogger(__name__)
 logger.addHandler(logging.NullHandler())
 
 WEEKS = ['week_1', 'week_2', 'week_3', 'week_4', 'week_5', 'week_6', 'week_7', 'week_8', 'week_9', 'week_10',
-         'week_11', 'week_12', 'week_13', 'week_14', 'week_15', 'week_16', 'week_17', 'Wildcard', 'Divisional',
-         'ConfChamp', 'SuperBowl']
+         'week_11', 'week_12', 'week_13', 'week_14', 'week_15', 'week_16', 'week_17', 'week_18', 'week_19',
+         'week_20', 'week_21']
 
 
 def html_to_pandas(html):
@@ -68,7 +68,7 @@ def html_to_pandas(html):
         row = []
         for i in r.find_all(['th', 'td']):
             if len(i) > 0:
-                row.append(str(i.contents[0]))
+                row.append(' '.join([str(c) for c in i.contents]))
             else:
                 row.append(None)
         rows.append(row)
@@ -84,7 +84,7 @@ def clean_stat_table(df, kind):
     elif kind == 'advanced':
         df.columns = df.iloc[0]
     else:
-        raise
+        raise   # TODO: better error handling
     indexes_to_drop = df.loc[df['Player'] == 'Player'].index.values.tolist() + \
                       df.loc[df['Player'].isnull()].index.values.tolist()
     df.drop(index=indexes_to_drop, inplace=True)
@@ -127,24 +127,43 @@ class NFLYearScraper:
     Methods:
 
     """
-    # TODO
-    base_url = 'https://www.pro-football-reference.com/years/2019/week_1.htm'
 
     def __init__(self, year):
+        print(__name__)
         self._logger = logging.getLogger(__name__)
         self._logger.addHandler(logging.NullHandler())
         self._set_year(year)
+        self.weeks = list()
+        self._logger.info(f"Created year object for: {str(self.year)}")
 
     # Setters
     def _set_year(self, year):
-        if (int(year) < 2020) & (int(year) >= 2000):
+        if (int(year) < int(time.strftime('%Y'))) & (int(year) >= 2000):
             self.year = year
         else:
             raise ValueError()
 
     def scrape_year(self):
-        # TODO
-        pass
+        # TODO: think about parallelizing this. It would increase speed but could get us banned.
+        self._logger.info(f"Scraping data for year: {str(self.year)}")
+        for w in WEEKS:
+            self.weeks.append(NFLWeekScraper(
+                year=self.year,
+                week=w
+            ))
+        for w in self.weeks:
+            w.scrape_week()
+
+    def scrape_weeks(self):
+        # TODO: think about parallelizing this. It would increase speed but could get us banned.
+        self._logger.info(f"Scraping all of the weeks in the year: {str(self.year)}")
+        for w in self.weeks:
+            w.scrape_games()
+
+    def save_year_data(self):
+        self._logger.info(f"Saving all of the raw data for the year: {str(self.year)}")
+        for w in self.weeks:
+            w.save_week_data()
 
 
 # %%
@@ -170,23 +189,24 @@ class NFLWeekScraper:
 
     # Setters
     def _set_year(self, year):
-        if (int(year) <= 2020) & (int(year) >= 1970):
+        if (int(year) <= int(time.strftime('%Y'))) & (int(year) >= 1970):
             self.year = year
         else:
-            raise ValueError()
+            raise ValueError()  # TODO: better error handling
 
     def _set_week(self, week):
         if week in WEEKS:
             self.week = week
         else:
-            raise ValueError()
+            raise ValueError()  # TODO: better error handling
 
     # Methods
     def scrape_week(self):
+        self._logger.info(f"Scraping week data from: {str(self.year) + '/' + self.week + '.htm'}")
         self._html = BeautifulSoup(comm.sub('', requests.get(self.base_url + str(self.year) + '/' + self.week + '.htm')
                                             .text), 'lxml')
         for g in self._html.find_all("div", {"class": "game_summary"}):
-            time.sleep(1)
+            #time.sleep(1)
             self.games.append(NFLGameScraper(
                 year=self.year,
                 week=self.week,
@@ -194,10 +214,13 @@ class NFLWeekScraper:
             ))
 
     def scrape_games(self):
+        # TODO: think about parallelizing this. It would increase speed but could get us banned.
+        self._logger.info(f"Scraping game data for week: {self.year}, {self.week}")
         for g in self.games:
             g.scrape_game()
 
     def save_week_data(self):
+        self._logger.info(f"Saving raw game data for week: {self.year}, {self.week}")
         for g in self.games:
             filepath = f'./data/raw/games/{g.get_id()}/'
             if not os.path.isdir(filepath):
@@ -242,7 +265,6 @@ class NFLGameScraper:
         self._snap_counts = None
         self._drives = None
         self._play_by_play = None
-        self.scrape_game()
         self._logger.info(f"Created game object for game: {self._id}")
 
     # Setters
@@ -321,13 +343,18 @@ class NFLGameScraper:
 
     def _scrape_game_info(self):
         """Scrape the game info as well as the coaches and stadium and save it as a pandas dataframe"""
-        # TODO: Can we get a date for the game here??
         game_info_html = self._html.find('table', {'id': 'game_info'})
         game_info = html_to_pandas(game_info_html)
         # Find the coaches and add them to game info
         coaches = [c.a for c in self._html.find('div', {'class': 'scorebox'}).find_all('div', {'class': 'datapoint'})]
         game_info = game_info.append({0: 'home coach', 1: str(coaches[0])}, ignore_index=True)
         game_info = game_info.append({0: 'away coach', 1: str(coaches[1])}, ignore_index=True)
+        # Find the game date and add it to game info
+        game_date = self._html.find('div', {'class': 'scorebox_meta'}).find('div').text
+        game_info = game_info.append({0: 'date', 1: str(game_date)}, ignore_index=True)
+        # Find the game date and add it to game info
+        game_time = self._html.find('div', {'class': 'scorebox_meta'}).find_all('div')[1].text
+        game_info = game_info.append({0: 'time', 1: str(game_time)}, ignore_index=True)
         # Find the stadium and add it to game info
         stadium = self._html.find('div', {'class': 'scorebox'}).find_all('a')[10]
         game_info = game_info.append({0: 'stadium', 1: str(stadium)}, ignore_index=True)
