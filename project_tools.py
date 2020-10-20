@@ -26,16 +26,22 @@ __maintainer__ = "Alec Feeman"
 __email__ = "afeeman@icloud.com"
 __status__ = "Development"
 
+#%%
 import pandas as pd
 import numpy as np
+import random
+import requests
+from configparser import ConfigParser
+import time
 
-
+#%%
 def expand_pandas_output():
     pd.set_option('display.max_rows', 500)
     pd.set_option('display.max_columns', 500)
     pd.set_option('display.width', 1000)
 
 
+#%%
 def calculate_psi(expected, actual, buckettype='bins', buckets=10, axis=0):
     """Calculate the PSI (population stability index) across all variables
     example: calculate_psi(initial, new, buckettype='quantiles', buckets=10, axis=1)
@@ -111,6 +117,8 @@ def calculate_psi(expected, actual, buckettype='bins', buckets=10, axis=0):
 
     return psi_values
 
+
+#%%
 class bidict(dict):
     def __init__(self, *args, **kwargs):
         super(bidict, self).__init__(*args, **kwargs)
@@ -130,3 +138,83 @@ class bidict(dict):
             del self.inverse[self[key]]
         super(bidict, self).__delitem__(key)
 
+
+#%%
+class ScraperProxy:
+    """
+    A Class to use the request library alongside proxies from webshare. More infromation about webshare can be found
+    at https://proxy.webshare.io/docs/?python#introduction. Future plans include implementation of session logic.
+
+    Requires a config.ini file that has a section header [webshare] with an api_key in the section.
+
+    Attributes:
+        _proxies: list of proxies - private.
+        _api_key:
+
+    Methods:
+        _get_proxies: Get the avaliable proxies from webshare.
+        _try_get_request: A meth
+        get_with_proxy:
+
+    """
+
+    def __init__(self):
+        self._proxies = []
+        parser = ConfigParser()
+        parser.read('config.ini')
+        self._api_key = parser.get('webshare','api_key')
+        self._get_proxies()
+
+    def _get_proxies(self):
+        response = requests.get('https://proxy.webshare.io/api/proxy/list/',
+                                headers={"Authorization": f"Token {self._api_key}"})
+        for r in response.json()['results']:
+            if r['valid']:
+                user = r['username']
+                pswd = r['password']
+                ip = r['proxy_address']
+                port = r['ports']['http']
+                self._proxies.append({
+                    'http': f'http://{user}:{pswd}@{ip}:{port}/',
+                    'https': f'https://{user}:{pswd}@{ip}:{port}/'
+                })
+
+    def _try_get_request(self, url, proxy):
+        time.sleep(random.random() * 1.75 + .25)
+        response = requests.get(url, proxies=proxy)
+        if 200 <= response.status_code <= 299:
+            return response
+        if 400 <= response.status_code <= 499:
+            return 'Client HTTP Error'
+        if 500 <= response.status_code <= 599:
+            return 'Server HTTP Error'
+        else:
+            return 'Other HTTP Error'
+
+    def get(self, url):
+        if len(self._proxies) == 0:
+            self._get_proxies()
+        proxy = self._proxies[random.randint(0, len(self._proxies) - 1)]
+        try:
+            response = self._try_get_request(url, proxy)
+            if response == 'Client HTTP Error':
+                # Assume the proxy is bad and move on
+                raise SystemError('Bad Proxy')
+            elif response == 'Server HTTP Error':
+                # Try Again
+                self.get(url)
+            elif response == 'Other HTTP Error':
+                # Try Again
+                self.get(url)
+            else:
+                return response
+        except Exception as e:
+            # log the exception here
+            print(e)
+            try:
+                # implement here what to do when there’s a connection error
+                # remove the used proxy from the pool and retry the request using another one
+                self._proxies.remove(proxy)
+                self.get(url)
+            except Exception as e:
+                raise e
