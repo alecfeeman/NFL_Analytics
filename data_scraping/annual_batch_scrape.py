@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 """
-Code to scrape all modern historical NFL data up to today.
+code to scrape the most recent weeks data, this can be run in a batch job weekly.
 
 -----------------------------------------------------------------------------
 This program is free software: you can redistribute it and/or modify it under
@@ -22,13 +22,12 @@ __copyright__ = "Copyright 2020, Alec Feeman"
 __credits__ = ["Alec Feeman"]
 __license__ = "GPLv3"
 __version__ = "v0.1.0-alpha"
-__date__ = "09/16/2020"
+__date__ = "10/22/2020"
 __maintainer__ = "Alec Feeman"
 __email__ = "afeeman@icloud.com"
 __status__ = "Development"
 
 import logging
-import time
 import data_scraping.scrape_nfl as scrape_nfl
 import data_scraping.etl as etl
 
@@ -58,25 +57,14 @@ def configure_logging( file_level, console_level, filepath):
 
 def main():
 
-    current_year = int(time.strftime('%Y'))
+    # get draft data
 
-    # create a folder with the current date and time to hold the raw data
+    # get combine data
 
-    # scrape year data for every year < current year
+    # update coaches
 
-    # scrape week data for the weeks that have happened in the current year
+    # update players
 
-    # scrape players
-
-    # scrape coaches
-
-    # Save raw data
-
-    # ETL data
-
-    # Save consumption data
-
-    # load consumption data into database
 
     pass
 

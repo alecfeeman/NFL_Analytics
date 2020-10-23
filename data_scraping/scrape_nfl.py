@@ -32,7 +32,6 @@ __status__ = "Development"
 
 # %%
 import pandas as pd
-import requests
 from bs4 import BeautifulSoup
 import bs4
 import re
@@ -40,7 +39,7 @@ import logging
 import time
 import os
 import random
-from project_tools import bidict, ScraperProxy
+from project_tools import ScraperProxy
 
 # %%
 comm = re.compile("<!--|-->")
@@ -48,7 +47,7 @@ MIN_YEAR = 1970
 WEEKS = ['week_1', 'week_2', 'week_3', 'week_4', 'week_5', 'week_6', 'week_7', 'week_8', 'week_9', 'week_10',
          'week_11', 'week_12', 'week_13', 'week_14', 'week_15', 'week_16', 'week_17', 'week_18', 'week_19',
          'week_20', 'week_21']
-TEAMS = bidict({
+TEAMS = {
     'CDG': ['Arizona Cardinals', 'Phoenix Cardinals', 'St. Louis Cardinals'],
     'ATL': ['Atlanta Falcons'],
     'RAV': ['Baltimore Ravens'],
@@ -81,7 +80,7 @@ TEAMS = bidict({
     'TAM': ['Tampa Bay Buccaneers'],
     'OTI': ['Tennessee Titans', 'Houston Oilers', 'Tennessee Oilers'],
     'WAS': ['Washington Football Team', 'Washington Redskins']
-})
+}
 
 
 # %%
@@ -99,8 +98,10 @@ def check_team(team):
     """
     if team.upper() in TEAMS.keys():
         return team.upper()
-    elif team in TEAMS.values():
-        return TEAMS.inverse[team]
+    elif team in [item for sublist in TEAMS.values() for item in sublist]:
+        for k, v in TEAMS.items():
+            if team in v:
+                return k
     else:
         return False
 
@@ -183,7 +184,7 @@ class NFLDraftScraper:
             raise ValueError()
 
     def scrape_draft(self):
-        self._logger.info(f"")
+        self._logger.info(f"Scraping draft data for {self.year}")
         self._html = BeautifulSoup(comm.sub('', self._scraper_proxy.get(self.base_url + str(self.year) + '/draft.htm'
                                                                         ).text), 'lxml')
         self._scrape_draft_data()
@@ -193,14 +194,23 @@ class NFLDraftScraper:
     def _scrape_draft_data(self):
         draft_html = self._html.find('table', {'id': 'drafts'})
         draft = html_to_pandas(draft_html)
-        cols = []
-        draft.columns = cols
+        draft = draft[[0, 1, 2, 3, 4, 5, 27, 28]]
+        draft.columns = draft.iloc[1]
+        draft = draft[~draft['Pick'].isin(['Pick','Misc'])]
+        self._draft_data = draft
 
     def _scrape_supplemental_draft_data(self):
-        pass
+        supplemental_draft_html = self._html.find('table', {'id': 'drafts_supp'})
+        supplemental_draft = html_to_pandas(supplemental_draft_html)
+        supplemental_draft = supplemental_draft[[0, 1, 2, 3, 4, 5, 27, 28]]
+        supplemental_draft.columns = supplemental_draft.iloc[1]
+        supplemental_draft = supplemental_draft[~supplemental_draft['Pick'].isin(['Pick', 'Misc'])]
+        self._supplemental_draft_data = supplemental_draft
 
     def _scrape_draft_pick_trades(self):
-        pass
+        draft_pick_trades_html = self._html.find('div', {'id': 'div_transactions'})
+        draft_pick_trades = draft_pick_trades_html.find_all('p')
+        self._draft_pick_trades = pd.DataFrame([d.text for d in draft_pick_trades], columns=['Transaction'])
 
     def get_draft_data(self):
         return self._draft_data
@@ -228,7 +238,7 @@ class NFLDraftScraper:
                 s
             except Exception as e:
                 self._logger.warning(f'Exception saving data: {e}')
-        self._logger.info(f"Data saved for game: {self.year} as csv files")
+        self._logger.info(f"Data saved for draft: {self.year} as csv files")
 
     def save_parquet(self, filepath):
         saves = [self.get_draft_data().to_parquet(filepath + self.year + '_draft_data.parquet'),
@@ -240,12 +250,12 @@ class NFLDraftScraper:
                 s
             except Exception as e:
                 self._logger.warning(f'Exception saving data: {e}')
-        self._logger.info(f"Data saved for game: {self.year} as parquet files")
+        self._logger.info(f"Data saved for draft: {self.year} as parquet files")
 
 
 # %%
+# TODO
 class NFLCombineScraper:
-    # TODO
     """
     desc
 
@@ -254,13 +264,14 @@ class NFLCombineScraper:
     Methods:
 
     """
-    base_url = 'https://www.pro-football-reference.com/draft/2020-combine.htm'
+    base_url = 'https://www.pro-football-reference.com/draft/'
 
     def __init__(self, year, scraper_proxy):
         self._logger = logging.getLogger(__name__)
         self._logger.addHandler(logging.NullHandler())
         self._set_year(year)
         self._scraper_proxy = scraper_proxy
+        self._combine_data = None
         self._html = None
 
     def _set_year(self, year):
@@ -270,9 +281,17 @@ class NFLCombineScraper:
             raise ValueError()
 
     def scrape_combine(self):
-        self._logger.info(f"")
-        self._html = BeautifulSoup(comm.sub('', self._scraper_proxy.get(self.base_url + '').text), 'lxml')
+        self._logger.info(f"Scraping combine data for {self.year}")
+        self._html = BeautifulSoup(comm.sub('', self._scraper_proxy.get(self.base_url + str(self.year) + '-combine.htm')
+                                            .text), 'lxml')
+        self._scrape_combine_data()
 
+    def _scrape_combine_data(self):
+        # TODO
+        combine_html = self._html.find('table', {'id': 'combine'})
+
+    def get_combine_data(self):
+        return self._combine_data
 
     def save(self, filetype, filepath):
         if not filepath.endswith('/'):
@@ -283,27 +302,23 @@ class NFLCombineScraper:
             self.save_parquet(filepath)
 
     def save_csv(self, filepath):
-        saves = [self.get_draft_data().to_csv(filepath + self.year + '_draft_data.csv')]
-        for s in saves:
-            try:
-                s
-            except Exception as e:
-                self._logger.warning(f'Exception saving data: {e}')
-        self._logger.info(f"Data saved for game: {self.year} as csv files")
+        try:
+            self.get_combine_data().to_csv(filepath + self.year + '_combine_data.csv')
+        except Exception as e:
+            self._logger.warning(f'Exception saving data: {e}')
+        self._logger.info(f"Data saved for combine: {self.year} as csv files")
 
     def save_parquet(self, filepath):
-        saves = [self.get_draft_data().to_parquet(filepath + self.year + '_draft_data.parquet')]
-        for s in saves:
-            try:
-                s
-            except Exception as e:
-                self._logger.warning(f'Exception saving data: {e}')
-        self._logger.info(f"Data saved for game: {self.year} as parquet files")
+        try:
+            self.get_combine_data().to_parquet(filepath + self.year + '_combine_data.parquet')
+        except Exception as e:
+            self._logger.warning(f'Exception saving data: {e}')
+        self._logger.info(f"Data saved for combine: {self.year} as parquet files")
 
 
 # %%
+# TODO
 class NFLInjuryScraper:
-    # TODO
     """
     desc
 
@@ -320,6 +335,7 @@ class NFLInjuryScraper:
         self._set_team(team)
         self._set_year(year)
         self._scraper_proxy = scraper_proxy
+        self._injury_data = None
         self._html = None
 
     def _set_team(self, team):
@@ -336,10 +352,17 @@ class NFLInjuryScraper:
             raise ValueError()
 
     def scrape_injuries(self):
+        # TODO
         self._logger.info(f"Scraping injury data for: {str(self.team)} in {str(self.year)}")
         self._html = BeautifulSoup(comm.sub('', self._scraper_proxy.get(self.base_url + str(self.team).lower() + '/' +
                                                                         str(self.year) + '_injuries.htm').text), 'lxml')
 
+    def _scrape_injury_data(self):
+        # TODO
+        combine_html = self._html.find('table', {'id': 'team_injuries'})
+
+    def get_injury_data(self):
+        return self._injury_data
 
     def save(self, filetype, filepath):
         if not filepath.endswith('/'):
@@ -350,25 +373,108 @@ class NFLInjuryScraper:
             self.save_parquet(filepath)
 
     def save_csv(self, filepath):
-        saves = [self.get_draft_data().to_csv(filepath + self.year + '_draft_data.csv')]
-        for s in saves:
-            try:
-                s
-            except Exception as e:
-                self._logger.warning(f'Exception saving data: {e}')
-        self._logger.info(f"Data saved for game: {self.year} as csv files")
+        try:
+            self.get_injury_data().to_csv(filepath + str(self.team) + '_' + str(self.year) + '_injury_data.csv')
+        except Exception as e:
+            self._logger.warning(f'Exception saving data: {e}')
+        self._logger.info(f"Data saved for injuries: {self.year}, {self.team}as csv files")
 
     def save_parquet(self, filepath):
-        saves = [self.get_draft_data().to_parquet(filepath + self.year + '_draft_data.parquet')]
-        for s in saves:
-            try:
-                s
-            except Exception as e:
-                self._logger.warning(f'Exception saving data: {e}')
-        self._logger.info(f"Data saved for game: {self.year} as parquet files")
+        try:
+            self.get_injury_data().to_parquet(filepath + str(self.team) + '_' + str(self.year) + '_injury_data.parquet')
+        except Exception as e:
+            self._logger.warning(f'Exception saving data: {e}')
+        self._logger.info(f"Data saved for injuries: {self.year}, {self.team} as parquet files")
 
 
 # %%
+# TODO
+class NFLTravelScraper:
+    """
+        desc
+
+        Attributes:
+
+        Methods:
+
+    """
+    base_url = 'https://www.pro-football-reference.com/teams/cle/2020_travel.htm'
+
+    def __init__(self, year, team, scraper_proxy):
+        self._logger = logging.getLogger(__name__)
+        self._logger.addHandler(logging.NullHandler())
+        self._scraper_proxy = scraper_proxy
+        self._set_team(team)
+        self._set_year(year)
+        self._travel_data = None
+        self._html = None
+
+    def _set_team(self, team):
+        team = check_team(team)
+        if team:
+            self.team = team
+        else:
+            raise ValueError('An invalid team abbreviation or name was passed')
+
+    def _set_year(self, year):
+        if check_year(year):
+            self.year = year
+        else:
+            raise ValueError()
+
+    def scrape_travel(self):
+        # TODO
+        pass
+
+    def _scrape_travel_data(self):
+        # TODO
+        travel_html = self._html.find('table', {'id': 'map_table'})
+
+    def get_travel_data(self):
+        return self._travel_data
+
+    def save(self, filetype, filepath):
+        if not filepath.endswith('/'):
+            filepath = filepath + '/'
+        if filetype == 'csv':
+            self.save_csv(filepath)
+        elif filetype == 'parquet':
+            self.save_parquet(filepath)
+
+    def save_csv(self, filepath):
+        try:
+            self.get_travel_data().to_csv(filepath + str(self.year) + '_' + str(self.team) + '_travel_data.csv')
+        except Exception as e:
+            self._logger.warning(f'Exception saving data: {e}')
+        self._logger.info(f"Data saved for travel: {self.year}, {self.team} as csv files")
+
+    def save_parquet(self, filepath):
+        try:
+            self.get_travel_data().to_parquet(filepath + str(self.year) + '_' + str(self.team) + '_travel_data.parquet')
+        except Exception as e:
+            self._logger.warning(f'Exception saving data: {e}')
+        self._logger.info(f"Data saved for travel: {self.year}, {self.team} as parquet files")
+
+
+# %%
+# TODO
+class NFLTradeScraper:
+    """
+    desc
+
+    Attributes:
+
+    Methods:
+
+    """
+    base_url = 'https://www.pro-football-reference.com/teams/cle/2020_trades.htm'
+
+    def __init__(self):
+        pass
+
+
+# %%
+# TODO
 class NFLCoachScraper:
     # TODO
     """
@@ -386,6 +492,10 @@ class NFLCoachScraper:
         self._logger.addHandler(logging.NullHandler())
         self._set_coach(coach)
         self._scraper_proxy = scraper_proxy
+        self._coaching_history = None
+        self._worked_for = None
+        self._employed = None
+        self._coach_info = None
         self._html = None
 
     def _set_coach(self, coach):
@@ -395,6 +505,33 @@ class NFLCoachScraper:
         self._logger.info(f"")
         self._html = BeautifulSoup(comm.sub('', self._scraper_proxy.get(self.base_url + '').text), 'lxml')
 
+    def _scrape_coach_info(self):
+        # TODO
+        pass
+
+    def _scrape_coaching_history(self):
+        # TODO
+        pass
+
+    def _scrape_worked_for(self):
+        # TODO
+        pass
+
+    def _srcape_employed(self):
+        # TODO
+        pass
+
+    def get_coaching_history(self):
+        return self._coaching_history
+
+    def get_worked_for(self):
+        return self._worked_for
+
+    def get_employed(self):
+        return self._employed
+
+    def get_coach_info(self):
+        return self._coach_info
 
     def save(self, filetype, filepath):
         if not filepath.endswith('/'):
@@ -405,27 +542,33 @@ class NFLCoachScraper:
             self.save_parquet(filepath)
 
     def save_csv(self, filepath):
-        saves = [self.get_draft_data().to_csv(filepath + self.year + '_draft_data.csv')]
+        saves = [self.get_coach_info().to_csv(filepath + self.coach + '_coach_info_data.csv'),
+                 self.get_worked_for().to_csv(filepath + self.coach + '_worked_for_data.csv'),
+                 self.get_employed().to_csv(filepath + self.coach + '_employed_data.csv'),
+                 self.get_coaching_history().to_csv(filepath + self.coach + '_coaching_history_data.csv')]
         for s in saves:
             try:
                 s
             except Exception as e:
                 self._logger.warning(f'Exception saving data: {e}')
-        self._logger.info(f"Data saved for game: {self.year} as csv files")
+        self._logger.info(f"Data saved for coach: {self.coach} as csv files")
 
     def save_parquet(self, filepath):
-        saves = [self.get_draft_data().to_parquet(filepath + self.year + '_draft_data.parquet')]
+        saves = [self.get_coach_info().to_parquet(filepath + self.coach + '_coach_info_data.parquet'),
+                 self.get_worked_for().to_parquet(filepath + self.coach + '_worked_for_data.parquet'),
+                 self.get_employed().to_parquet(filepath + self.coach + '_employed_data.parquet'),
+                 self.get_coaching_history().to_parquet(filepath + self.coach + '_coaching_history_data.parquet')]
         for s in saves:
             try:
                 s
             except Exception as e:
                 self._logger.warning(f'Exception saving data: {e}')
-        self._logger.info(f"Data saved for game: {self.year} as parquet files")
+        self._logger.info(f"Data saved for coach: {self.coach} as parquet files")
 
 
 # %%
+# TODO
 class NFLPlayerScraper:
-    # TODO
     """
         desc
 
@@ -441,15 +584,49 @@ class NFLPlayerScraper:
         self._logger.addHandler(logging.NullHandler())
         self._set_player(player)
         self._scraper_proxy = scraper_proxy
+        self._trades = None
+        self._transactions = None
+        self._combine_measurements = None
+        self._player_data = None
         self._html = None
 
     def _set_player(self, player):
+        # TODO: Need to implement some form of checking
         self.player = player
 
     def scrape_player(self):
+        # TODO
         self._logger.info(f"")
         self._html = BeautifulSoup(comm.sub('', self._scraper_proxy.get(self.base_url + '').text), 'lxml')
 
+    def _scrape_player_trades(self):
+        # TODO: if there are any trades then scrape them
+        pass
+
+    def _scrape_player_transactions(self):
+        # TODO: if there are any transactions scrape them
+        pass
+
+    def _scrape_player_combine(self):
+        # TODO: scrape combine measurement data
+        pass
+
+    def _scrape_player_data(self):
+        # TODO: scrape overall player info
+        pass
+
+    # Getters
+    def get_trades(self):
+        return self._trades
+
+    def get_transactions(self):
+        return self._transactions
+
+    def get_combine_measurements(self):
+        return self._combine_measurements
+
+    def get_player_data(self):
+        return self._player_data
 
     def save(self, filetype, filepath):
         if not filepath.endswith('/'):
@@ -460,69 +637,28 @@ class NFLPlayerScraper:
             self.save_parquet(filepath)
 
     def save_csv(self, filepath):
-        saves = [self.get_draft_data().to_csv(filepath + self.year + '_draft_data.csv')]
+        saves = [self.get_trades().to_csv(filepath + self.player + '_trades_data.csv'),
+                 self.get_transactions().to_csv(filepath + self.player + '_transactions_data.csv'),
+                 self.get_combine_measurements().to_csv(filepath + self.player + '_combine_measurements_data.csv'),
+                 self.get_player_data().to_csv(filepath + self.player + '_player_data.csv')]
         for s in saves:
             try:
                 s
             except Exception as e:
                 self._logger.warning(f'Exception saving data: {e}')
-        self._logger.info(f"Data saved for game: {self.year} as csv files")
+        self._logger.info(f"Data saved for player: {self.player} as csv files")
 
     def save_parquet(self, filepath):
-        saves = [self.get_draft_data().to_parquet(filepath + self.year + '_draft_data.parquet')]
+        saves = [self.get_trades().to_parquet(filepath + self.player + '_trades_data.parquet'),
+                 self.get_transactions().to_parquet(filepath + self.player + '_transactions_data.parquet'),
+                 self.get_combine_measurements().to_parquet(filepath + self.player + '_combine_measurements_data.parquet'),
+                 self.get_player_data().to_parquet(filepath + self.player + '_player_data.parquet')]
         for s in saves:
             try:
                 s
             except Exception as e:
                 self._logger.warning(f'Exception saving data: {e}')
-        self._logger.info(f"Data saved for game: {self.year} as parquet files")
-
-
-# %%
-class NFLTravelScraper:
-    # TODO
-    """
-        desc
-
-        Attributes:
-
-        Methods:
-
-    """
-    base_url = 'https://www.pro-football-reference.com/teams/cle/2020_travel.htm'
-
-    def __init__(self, scraper_proxy):
-        self._logger = logging.getLogger(__name__)
-        self._logger.addHandler(logging.NullHandler())
-        self._scraper_proxy = scraper_proxy
-        self._html = None
-
-
-    def save(self, filetype, filepath):
-        if not filepath.endswith('/'):
-            filepath = filepath + '/'
-        if filetype == 'csv':
-            self.save_csv(filepath)
-        elif filetype == 'parquet':
-            self.save_parquet(filepath)
-
-    def save_csv(self, filepath):
-        saves = [self.get_draft_data().to_csv(filepath + self.year + '_draft_data.csv')]
-        for s in saves:
-            try:
-                s
-            except Exception as e:
-                self._logger.warning(f'Exception saving data: {e}')
-        self._logger.info(f"Data saved for game: {self.year} as csv files")
-
-    def save_parquet(self, filepath):
-        saves = [self.get_draft_data().to_parquet(filepath + self.year + '_draft_data.parquet')]
-        for s in saves:
-            try:
-                s
-            except Exception as e:
-                self._logger.warning(f'Exception saving data: {e}')
-        self._logger.info(f"Data saved for game: {self.year} as parquet files")
+        self._logger.info(f"Data saved for player: {self.player} as parquet files")
 
 
 # %%
@@ -987,6 +1123,7 @@ class NFLGameScraper:
 
 
 # %%
+# TODO
 class NFLYearScraper:
     """
     desc
@@ -1024,6 +1161,8 @@ class NFLYearScraper:
         random.shuffle(self.weeks)
         for w in self.weeks:
             w.scrape_week()
+        # TODO: scrape draft
+        # TODO: scrape combine
 
     def scrape_weeks(self):
         self._logger.info(f"Scraping all of the weeks in the year: {str(self.year)}")
@@ -1037,6 +1176,7 @@ class NFLYearScraper:
 
 
 # %%
+# TODO
 class NFLWeekScraper:
     """
     description
@@ -1092,8 +1232,17 @@ class NFLWeekScraper:
         for g in self.games:
             g.scrape_game()
 
+    def scrape_injuries(self):
+        # TODO
+        pass
+
+    def scrape_travel(self):
+        # TODO
+        pass
+
     def save_week_data(self):
-        self._logger.info(f"Saving raw game data for week: {self.year}, {self.week}")
+        # TODO
+        self._logger.info(f"Saving raw data for week: {self.year}, {self.week}")
         for g in self.games:
             filepath = f'./data/raw/games/{g.get_id()}/'
             if not os.path.isdir(filepath):

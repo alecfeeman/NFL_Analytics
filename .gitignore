@@ -319,3 +319,6 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
+# Configuration files as they might contain sensitive info
+*.ini
+

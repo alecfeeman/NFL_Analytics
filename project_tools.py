@@ -180,7 +180,7 @@ class ScraperProxy:
                 })
 
     def _try_get_request(self, url, proxy):
-        time.sleep(random.random() * 1.75 + .25)
+        time.sleep(random.random() * 2 + 1)
         response = requests.get(url, proxies=proxy)
         if 200 <= response.status_code <= 299:
             return response
