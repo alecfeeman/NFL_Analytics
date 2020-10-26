@@ -322,3 +322,7 @@ Temporary Items
 # Configuration files as they might contain sensitive info
 *.ini
 
+/data/
+/logs/
+/venv/
+

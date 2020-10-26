@@ -33,6 +33,8 @@ import random
 import requests
 from configparser import ConfigParser
 import time
+import sqlalchemy
+import pymysql
 
 #%%
 def expand_pandas_output():
@@ -116,6 +118,17 @@ def calculate_psi(expected, actual, buckettype='bins', buckets=10, axis=0):
             psi_values[i] = psi(expected[i,:], actual[i,:], buckets)
 
     return psi_values
+
+
+#%%
+def connect_to_db():
+    parser = ConfigParser()
+    parser.read('config.ini')
+    user = parser.get('mariadb', 'user')
+    pswd = parser.get('mariadb', 'password')
+    host = parser.get('mariadb', 'host')
+    db = parser.get('mariadb', 'database')
+    return sqlalchemy.create_engine(f"mysql+pymysql://{user}:{pswd}@{host}/{db}", echo=True)
 
 
 #%%
