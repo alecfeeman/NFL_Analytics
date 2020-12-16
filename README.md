@@ -6,18 +6,35 @@ Weekly batch job to get new game data,
 Ingestion -> Process -> Storage -> Analytics
 
 
-## Forecasts
-Player level - Game Level Predictions
+## Tables
+- Player
+- Coach
+- Official
+- Team
+- Annual Level Data
+    - Draft
+    - Combine
+- Week Level Data
+    - Injuries
+    - Travel
+    - Trades
+    - Player Transactions
+- Game Level Tables
+    - Game Info
+    - Linescore
+    - Team Stats
+    - Offense
+    - Defense
+    - Advanced Passing
+    - Advanced Rushing
+    - Advanced Receiving
+    - Advanced Defense
+    - Returning
+    - Kicking
+    - Starters
+    - Snap Counts
+    - Drives
+    - Play by Play
 
-## Tools
-#### Draft Advisor
-Use combine and college data to analyze a players addition to your team.
-
-
-#### Trade Advisor
-
-
-#### Free Agent Advisor
-Use game forecasts to analyze a players addition to your team.
-
+## Metadata & Data Dictionaries 
 

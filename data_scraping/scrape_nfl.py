@@ -106,12 +106,13 @@ def check_team(team):
         return False
 
 
-def html_to_pandas(html):
+def html_to_pandas(html, keep_all_tags=False):
     """
     A function to convert a html table to a pandas dataframe.
 
     Args:
         html: BeautifulSoup tag object of a html table.
+        keep_all_tags: weather or not to parse the text of individual tags or return one long string.
     Returns:
         A Pandas Dataframe of the converted table.
     Raises:
@@ -124,10 +125,13 @@ def html_to_pandas(html):
     for r in html.find_all('tr'):
         row = []
         for i in r.find_all(['th', 'td']):
-            if len(i) > 0:
-                row.append(' '.join([str(c) for c in i.contents]))
+            if not keep_all_tags:
+                if len(i) > 0:
+                    row.append(' '.join([str(c) for c in i.contents]))
+                else:
+                    row.append(None)
             else:
-                row.append(None)
+                row.append(str(i))
         rows.append(row)
     return pd.DataFrame(rows)
 
@@ -254,7 +258,6 @@ class NFLDraftScraper:
 
 
 # %%
-# TODO
 class NFLCombineScraper:
     """
     desc
@@ -287,8 +290,12 @@ class NFLCombineScraper:
         self._scrape_combine_data()
 
     def _scrape_combine_data(self):
-        # TODO
         combine_html = self._html.find('table', {'id': 'combine'})
+        combine = html_to_pandas(combine_html)
+        combine.columns = combine.iloc[0]
+        combine = combine[combine['Player'] != 'Player']
+        combine.drop(columns=['Drafted (tm/rnd/yr)'], inplace=True)
+        self._combine_data = combine
 
     def get_combine_data(self):
         return self._combine_data
@@ -317,7 +324,6 @@ class NFLCombineScraper:
 
 
 # %%
-# TODO
 class NFLInjuryScraper:
     """
     desc
@@ -352,14 +358,17 @@ class NFLInjuryScraper:
             raise ValueError()
 
     def scrape_injuries(self):
-        # TODO
         self._logger.info(f"Scraping injury data for: {str(self.team)} in {str(self.year)}")
         self._html = BeautifulSoup(comm.sub('', self._scraper_proxy.get(self.base_url + str(self.team).lower() + '/' +
                                                                         str(self.year) + '_injuries.htm').text), 'lxml')
+        self._scrape_injury_data()
 
     def _scrape_injury_data(self):
-        # TODO
-        combine_html = self._html.find('table', {'id': 'team_injuries'})
+        injuries_html = self._html.find('table', {'id': 'team_injuries'})
+        injuries = html_to_pandas(injuries_html, keep_all_tags=True)
+        injuries.columns = injuries.iloc[0]
+        injuries.drop(0, inplace=True)
+        self._injury_data = injuries
 
     def get_injury_data(self):
         return self._injury_data
